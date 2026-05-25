@@ -132,6 +132,38 @@ async def run_scraping(twitter_url, website_url, telegram_url, address, chain) -
                 "telegram_members":0,"telegram_exists":False,
                 "bubblemaps_score":-1,"bubblemaps_bundled":False,"bubblemaps_url":""}
 
+# ── DexScreener Social Links ─────────────────────────────────────────────────
+async def get_dexscreener_socials(session, address) -> dict:
+    r = {"twitter_url": "", "telegram_url": "", "website_url": "", "dex_name": "", "token_name": "", "token_symbol": ""}
+    try:
+        async with session.get(f"https://api.dexscreener.com/latest/dex/tokens/{address}",
+                               timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            data = await resp.json()
+            pairs = data.get("pairs") or []
+            if pairs:
+                pair = pairs[0]
+                info = pair.get("info") or {}
+                # Socials
+                for s in info.get("socials", []):
+                    stype = s.get("type", "").lower()
+                    url   = s.get("url", "")
+                    if stype == "twitter" and url:
+                        r["twitter_url"] = url
+                    elif stype == "telegram" and url:
+                        r["telegram_url"] = url
+                # Website
+                websites = info.get("websites", [])
+                if websites:
+                    r["website_url"] = websites[0].get("url", "")
+                # Token info
+                r["dex_name"]     = pair.get("dexId", "")
+                r["token_name"]   = pair.get("baseToken", {}).get("name", "")
+                r["token_symbol"] = pair.get("baseToken", {}).get("symbol", "")
+        log.info(f"📡 DexScreener socials: twitter={bool(r['twitter_url'])} tg={bool(r['telegram_url'])} web={bool(r['website_url'])}")
+    except Exception as e:
+        log.warning(f"⚠️ DexScreener socials failed: {e}")
+    return r
+
 # ── GoPlus + Dev Wallet ───────────────────────────────────────────────────────
 async def get_goplus(session, address, chain) -> dict:
     r = {"dev_address":"","is_honeypot":False,"buy_tax":0,"sell_tax":0,"is_open_source":False}
@@ -207,11 +239,14 @@ async def handle_dyor(request: web.Request) -> web.Response:
     log.info(f"🔬 DYOR: {address} [{chain}]")
 
     async with aiohttp.ClientSession() as http:
-        scrape   = await run_scraping(data.get("twitter_url",""), data.get("website_url",""),
-                                       data.get("telegram_url",""), address, chain)
+        socials  = await get_dexscreener_socials(http, address)
+        twitter  = data.get("twitter_url","")  or socials.get("twitter_url","")
+        website  = data.get("website_url","")  or socials.get("website_url","")
+        telegram = data.get("telegram_url","") or socials.get("telegram_url","")
+        scrape   = await run_scraping(twitter, website, telegram, address, chain)
         goplus   = await get_goplus(http, address, chain)
         dev_hist = await get_dev_history(http, goplus.get("dev_address",""), chain)
-        payload  = {**data, **scrape, **goplus, **dev_hist}
+        payload  = {**data, **socials, **scrape, **goplus, **dev_hist}
         try:
             async with http.post(N8N_WEBHOOK, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 log.info(f"{'✅' if resp.status==200 else '⚠️'} n8n response: {resp.status}")
