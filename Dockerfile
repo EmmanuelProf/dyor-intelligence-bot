@@ -1,18 +1,20 @@
-FROM ubuntu:22.04
+FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
-    python3 python3-pip chromium-browser \
-    && rm -rf /var/lib/apt/lists/*
+    python3 python3-pip python3-venv \
+    chromium chromium-sandbox \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Tell Playwright to use the system chromium instead of downloading its own
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV CHROMIUM_PATH=/usr/bin/chromium
 
 COPY bot.py .
 

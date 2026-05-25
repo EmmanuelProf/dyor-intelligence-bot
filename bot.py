@@ -101,13 +101,18 @@ async def scrape_bubblemaps(page, address: str, chain: str) -> dict:
         log.warning(f"⚠️ Bubblemaps failed: {e}")
     return r
 
+CHROMIUM_PATH = os.environ.get("CHROMIUM_PATH", "")
+
 async def run_scraping(twitter_url, website_url, telegram_url, address, chain) -> dict:
     try:
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(
+            launch_args = dict(
                 headless=True,
                 args=["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-gpu"]
             )
+            if CHROMIUM_PATH:
+                launch_args["executable_path"] = CHROMIUM_PATH
+            browser = await pw.chromium.launch(**launch_args)
             page = await (await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800}
