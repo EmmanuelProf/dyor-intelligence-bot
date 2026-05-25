@@ -140,7 +140,7 @@ async def get_goplus(session, address, chain) -> dict:
         async with session.get(f"https://api.gopluslabs.io/api/v1/token_security/{cid}?contract_addresses={address}",
                                timeout=aiohttp.ClientTimeout(total=10)) as resp:
             data = await resp.json()
-            vals = list(data.get("result",{}).values())
+            vals = list((data.get("result") or {}).values())
             if vals:
                 d = vals[0]
                 r["dev_address"]   = d.get("creator_address","")
